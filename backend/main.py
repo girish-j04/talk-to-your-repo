@@ -33,7 +33,7 @@ app.add_middleware(
 )
 
 # Configure Gemini
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyDcYbr7xqUwTknLkUvOu8eyvqzmNuLmCwo")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 
 genai.configure(api_key=GEMINI_API_KEY)
@@ -96,7 +96,7 @@ def get_file_content(file_path: Path) -> Optional[str]:
     except Exception:
         return None
 
-def should_process_file(file_path: Path) -> bool:
+def should_process_file(file_path: Path, repo_root: Path) -> bool:
     """Determine if a file should be processed"""
     # Skip common non-text files and directories
     skip_extensions = {
@@ -144,12 +144,19 @@ def should_process_file(file_path: Path) -> bool:
     # Whitelist important config files that start with .
     important_dotfiles = {'.env', '.gitignore', '.dockerignore', '.editorconfig', '.eslintrc'}
     
-    # Debug logging
-    relative_path_str = str(file_path)
+    # Get relative path from repo root (this is the key fix!)
+    try:
+        relative_path = file_path.relative_to(repo_root)
+    except ValueError:
+        # If we can't get relative path, skip the file
+        logger.info(f"Skipped {file_path}: not within repo root")
+        return False
+    
+    relative_path_str = str(relative_path)
     logger.info(f"Checking file: {relative_path_str}")
     
-    # Skip if any parent directory is in skip_dirs
-    for part in file_path.parts:
+    # Skip if any parent directory in the RELATIVE path is in skip_dirs
+    for part in relative_path.parts:
         if part in skip_dirs:
             logger.info(f"Skipped {relative_path_str}: directory '{part}' in skip list")
             return False
@@ -300,7 +307,8 @@ async def process_repository(github_url: str, repo_id: str):
         logger.info("Scanning files...")
         for file_path in repo_dir.rglob("*"):
             if file_path.is_file():
-                if should_process_file(file_path):
+                # FIX: Pass repo_dir as the second parameter
+                if should_process_file(file_path, repo_dir):
                     content = get_file_content(file_path)
                     if content:
                         file_count += 1

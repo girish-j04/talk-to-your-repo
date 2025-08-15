@@ -15,6 +15,9 @@ from pydantic import BaseModel, HttpUrl
 import google.generativeai as genai
 import numpy as np
 import uvicorn
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
